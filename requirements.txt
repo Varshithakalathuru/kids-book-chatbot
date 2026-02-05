@@ -1,2 +1,5 @@
 streamlit
 pypdf
+langchain
+sentence-transformers
+faiss-cpu
