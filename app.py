@@ -1,5 +1,5 @@
 import streamlit as st
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -55,5 +55,6 @@ if question and st.session_state.vectorstore:
     st.write(docs[0].page_content)
     st.write("😊 Want to ask another question?")
     st.write("🌟 You’re doing great! Keep asking questions!")
+
 
 
