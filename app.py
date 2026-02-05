@@ -5,6 +5,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
+st.markdown("""
+<style>
+body {
+    background-color: #FFF7E6;
+}
+h1, h2, h3 {
+    color: #FF6F00;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("📚 Kids Book Chatbot 🤖")
 st.write("Upload a book and ask questions from it 😊")
 
@@ -33,6 +45,15 @@ if uploaded_file:
     question = st.text_input("Ask me a question:")
 
     if question:
-        docs = vectorstore.similarity_search(question, k=1)
-        st.write("🤖 Answer:")
-        st.write(docs[0].page_content)
+       docs = vectorstore.similarity_search(question, k=1)
+
+       answer = docs[0].page_content
+
+       st.write("🤖 Answer (Easy Explanation):")
+       st.write("😊 Let me explain simply:")
+
+       st.write(answer[:500])
+        
+ 
+       
+
