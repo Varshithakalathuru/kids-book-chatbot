@@ -4,8 +4,11 @@ from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
+
 from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -14,9 +17,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- TITLE ----------------
 st.markdown("## 📘 Kids Book Chatbot")
-st.markdown("Upload a kids story book PDF and ask questions in a fun way!")
+st.markdown("Upload a kids story book PDF and ask questions 😊")
 
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
@@ -38,7 +40,8 @@ def create_vectorstore(pdf):
     reader = PdfReader(pdf)
     text = ""
     for page in reader.pages:
-        text += page.extract_text()
+        if page.extract_text():
+            text += page.extract_text()
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -50,60 +53,62 @@ def create_vectorstore(pdf):
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    vectorstore = FAISS.from_texts(chunks, embeddings)
-    return vectorstore
+    return FAISS.from_texts(chunks, embeddings)
 
 
-def get_qa_chain(vectorstore):
+def get_chain(vectorstore):
     llm = ChatOpenAI(
-        temperature=0.3,
-        model="gpt-3.5-turbo"
+        model="gpt-3.5-turbo",
+        temperature=0.3
     )
 
-    qa = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-        chain_type="stuff"
+    prompt = ChatPromptTemplate.from_template(
+        """
+        You are a friendly assistant for kids.
+        Answer in simple words and short sentences.
+
+        Context:
+        {context}
+
+        Question:
+        {input}
+        """
     )
-    return qa
+
+    doc_chain = create_stuff_documents_chain(llm, prompt)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+    return create_retrieval_chain(retriever, doc_chain)
 
 # ---------------- PDF PROCESSING ----------------
 if pdf_file:
-    with st.spinner("📖 Reading the book and getting smarter..."):
-        vectorstore = create_vectorstore(pdf_file)
-        st.session_state.vectorstore = vectorstore
-    st.success("✅ Book loaded! Ask me anything 😊")
+    with st.spinner("📖 Reading the book..."):
+        st.session_state.vectorstore = create_vectorstore(pdf_file)
+    st.success("✅ Book loaded! Ask me anything 🎉")
 
-# ---------------- CHAT DISPLAY ----------------
+# ---------------- CHAT HISTORY ----------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # ---------------- USER INPUT ----------------
 if st.session_state.get("vectorstore"):
-    user_question = st.chat_input("Ask a question about the story...")
+    question = st.chat_input("Ask a question about the story...")
 
-    if user_question:
-        # show user message
+    if question:
         st.session_state.messages.append(
-            {"role": "user", "content": user_question}
+            {"role": "user", "content": question}
         )
-        with st.chat_message("user"):
-            st.markdown(user_question)
 
-        # generate answer
         with st.chat_message("assistant"):
             with st.spinner("🤖 Thinking..."):
-                qa_chain = get_qa_chain(st.session_state.vectorstore)
-                answer = qa_chain.run(
-                    "Answer like a friendly assistant for kids. "
-                    "Use simple words.\n\nQuestion: " + user_question
-                )
+                chain = get_chain(st.session_state.vectorstore)
+                result = chain.invoke({"input": question})
+                answer = result["answer"]
                 st.markdown(answer)
 
         st.session_state.messages.append(
             {"role": "assistant", "content": answer}
         )
-
 else:
-    st.info("👈 Upload a PDF from the sidebar to start chatting!")
+    st.info("👈 Upload a PDF from the sidebar to start chatting")
