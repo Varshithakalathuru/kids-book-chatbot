@@ -36,14 +36,14 @@ if clear:
     st.session_state.index = None
     st.session_state.chunks = []
 
-# ---------------- LOAD MODELS ----------------
+# ---------------- MODELS ----------------
 @st.cache_resource
 def load_models():
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     qa = pipeline(
-        "text2text-generation",   # ✅ CORRECT TASK
-        model="google/flan-t5-base",
+        "text2text-generation",
+        model="google/flan-t5-small",
         max_length=150,
         do_sample=False
     )
@@ -62,27 +62,26 @@ def process_pdf(pdf):
     if not text.strip():
         return None, None
 
-    chunks = [text[i:i + 500] for i in range(0, len(text), 500)]
+    chunks = [text[i:i+500] for i in range(0, len(text), 500)]
 
     embedder, _ = load_models()
     embeddings = embedder.encode(chunks)
 
     index = faiss.IndexFlatL2(embeddings.shape[1])
-    index.add(np.array(embeddings).astype("float32"))
+    index.add(np.array(embeddings))
 
     return index, chunks
 
-# ---------------- QUESTION ANSWERING ----------------
+# ---------------- QA ----------------
 def answer_question(question):
     embedder, qa = load_models()
 
-    q_embedding = embedder.encode([question]).astype("float32")
-    D, I = st.session_state.index.search(q_embedding, k=1)
-
+    q_embedding = embedder.encode([question])
+    D, I = st.session_state.index.search(np.array(q_embedding), k=1)
     context = st.session_state.chunks[I[0][0]]
 
     prompt = f"""
-Answer the question in simple English for kids.
+Answer the question in simple English for a child.
 
 Context:
 {context}
@@ -96,9 +95,9 @@ Answer:
     result = qa(prompt)
     answer = result[0]["generated_text"]
 
-    return answer   # ✅ THIS WAS MISSING
+    return answer   # 🔥 THIS WAS MISSING
 
-# ---------------- PDF LOAD ----------------
+# ---------------- LOAD PDF ----------------
 if pdf_file and st.session_state.index is None:
     with st.spinner("📖 Reading the book..."):
         index, chunks = process_pdf(pdf_file)
@@ -110,13 +109,12 @@ if pdf_file and st.session_state.index is None:
         st.session_state.chunks = chunks
         st.success("✅ Book loaded! Ask me anything 🎉")
 
-# ---------------- CHAT HISTORY ----------------
+# ---------------- CHAT ----------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ---------------- USER INPUT ----------------
-if st.session_state.index is not None:
+if st.session_state.index:
     question = st.chat_input("Ask a question about the story...")
 
     if question:
