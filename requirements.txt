@@ -1,7 +1,9 @@
 streamlit
-transformers==4.36.2
-torch
+langchain
+langchain-community
+transformers
 sentence-transformers
-pypdf
 faiss-cpu
-numpy
+PyPDF2
+pypdf
+torch
