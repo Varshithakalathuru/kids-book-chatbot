@@ -41,10 +41,11 @@ if clear:
 def load_models():
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
     qa = pipeline(
-    "text2text-generation",
+    task="text2text-generation",
     model="google/flan-t5-base",
     max_length=120
-    )
+)
+
 
     return embedder, qa
 
@@ -127,4 +128,5 @@ if st.session_state.index:
             {"role": "assistant", "content": answer})
 else:
     st.info("👈 Upload a PDF from the sidebar to start chatting")
+
 
