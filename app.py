@@ -93,7 +93,9 @@ def answer_question(question):
 
     Answer:
     """
-    result = qa(prompt)[0]["generated_text"]
+    result = qa(prompt)
+    answer = result[0]["generated_text"]
+
 
 
 
@@ -132,6 +134,7 @@ if st.session_state.index:
             {"role": "assistant", "content": answer})
 else:
     st.info("👈 Upload a PDF from the sidebar to start chatting")
+
 
 
 
