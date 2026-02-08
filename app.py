@@ -1,13 +1,9 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+from transformers import pipeline
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -16,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📘 Kids Book Chatbot")
+st.title("📘 Kids Book Chatbot (100% Free)")
 st.write("Upload a kids story book PDF and ask questions 😊")
 
 # ---------------- SIDEBAR ----------------
@@ -29,75 +25,67 @@ with st.sidebar:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = None
+if "index" not in st.session_state:
+    st.session_state.index = None
+
+if "chunks" not in st.session_state:
+    st.session_state.chunks = []
 
 if clear:
     st.session_state.messages = []
-    st.session_state.vectorstore = None
+    st.session_state.index = None
+    st.session_state.chunks = []
 
 # ---------------- FUNCTIONS ----------------
 @st.cache_resource
-def create_vectorstore(pdf):
+def load_models():
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    qa = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
+    return embedder, qa
+
+
+def process_pdf(pdf):
     reader = PdfReader(pdf)
     text = ""
 
     for page in reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            text += extracted
+        if page.extract_text():
+            text += page.extract_text()
 
     if not text.strip():
-        return None
+        return None, None
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
-    )
+    chunks = [text[i:i+500] for i in range(0, len(text), 500)]
 
-    chunks = splitter.split_text(text)
+    embedder, _ = load_models()
+    embeddings = embedder.encode(chunks)
 
-    if not chunks:
-        return None
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(np.array(embeddings))
 
-    embeddings = OpenAIEmbeddings()  # ✅ SAFE ON STREAMLIT CLOUD
-
-    return FAISS.from_texts(chunks, embeddings)
+    return index, chunks
 
 
-def get_chain(vectorstore):
-    llm = ChatOpenAI(
-        model="gpt-3.5-turbo",
-        temperature=0.3
-    )
+def answer_question(question):
+    embedder, qa = load_models()
+    q_embedding = embedder.encode([question])
 
-    prompt = ChatPromptTemplate.from_template(
-        """
-        You are a friendly assistant for kids.
-        Answer in simple words and short sentences.
+    D, I = st.session_state.index.search(np.array(q_embedding), k=1)
+    context = st.session_state.chunks[I[0][0]]
 
-        Context:
-        {context}
-
-        Question:
-        {input}
-        """
-    )
-
-    doc_chain = create_stuff_documents_chain(llm, prompt)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
-
-    return create_retrieval_chain(retriever, doc_chain)
+    result = qa(question=question, context=context)
+    return result["answer"]
 
 # ---------------- PDF PROCESSING ----------------
-if pdf_file and st.session_state.vectorstore is None:
+if pdf_file and st.session_state.index is None:
     with st.spinner("📖 Reading the book..."):
-        vectorstore = create_vectorstore(pdf_file)
+        index, chunks = process_pdf(pdf_file)
 
-    if vectorstore is None:
-        st.error("❌ This PDF has no readable text. Please upload a text-based PDF.")
+    if index is None:
+        st.error("❌ This PDF has no readable text.")
     else:
-        st.session_state.vectorstore = vectorstore
+        st.session_state.index = index
+        st.session_state.chunks = chunks
         st.success("✅ Book loaded! Ask me anything 🎉")
 
 # ---------------- CHAT HISTORY ----------------
@@ -106,7 +94,7 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # ---------------- USER INPUT ----------------
-if st.session_state.vectorstore:
+if st.session_state.index:
     question = st.chat_input("Ask a question about the story...")
 
     if question:
@@ -116,17 +104,10 @@ if st.session_state.vectorstore:
 
         with st.chat_message("assistant"):
             with st.spinner("🤖 Thinking..."):
-                try:
-                    chain = get_chain(st.session_state.vectorstore)
-                    result = chain.invoke({"input": question})
-                    answer = result["answer"]
-                except Exception as e:
-                    answer = "⚠️ Something went wrong. Please try again."
-
+                answer = answer_question(question)
                 st.markdown(answer)
 
         st.session_state.messages.append(
-            {"role": "assistant", "content": answer}
-        )
+            {"role": "assistant", "content": answer})
 else:
     st.info("👈 Upload a PDF from the sidebar to start chatting")
