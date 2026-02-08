@@ -1,8 +1,7 @@
 streamlit
 PyPDF2
-langchain==0.1.20
-langchain-community
-langchain-openai
 sentence-transformers
 faiss-cpu
-openai
+transformers
+torch
+numpy
