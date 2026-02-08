@@ -1,7 +1,7 @@
 streamlit
-PyPDF2
-sentence-transformers
-faiss-cpu
-transformers
+transformers==4.36.2
 torch
+sentence-transformers
+pypdf
+faiss-cpu
 numpy
