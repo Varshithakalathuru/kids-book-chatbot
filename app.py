@@ -43,8 +43,11 @@ def load_models():
     qa = pipeline(
     task="text2text-generation",
     model="google/flan-t5-base",
-    max_length=120
+    max_length=150,
+    temperature=0.2,
+    do_sample=False
 )
+
 
 
     return embedder, qa
@@ -80,17 +83,18 @@ def answer_question(question):
     context = st.session_state.chunks[I[0][0]]
 
     prompt = f"""
-    Answer the question in simple English for kids.
+    Answer the question clearly in simple English for a student.
 
     Context:
     {context}
 
     Question:
     {question}
-    """
 
+    Answer:
+    """
     result = qa(prompt)[0]["generated_text"]
-    return result
+
 
 
 # ---------------- PDF PROCESSING ----------------
@@ -128,5 +132,6 @@ if st.session_state.index:
             {"role": "assistant", "content": answer})
 else:
     st.info("👈 Upload a PDF from the sidebar to start chatting")
+
 
 
